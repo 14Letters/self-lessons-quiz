@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>学习工作台</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6f4f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Quiz">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<style>
+/* 布局三档（2026-09-29 适配 iPhone · 安卓平板）
+   手机竖屏  底栏导航 · 顶栏吸顶 · 「不会 / 提交」吸在拇指区
+   侧栏      宽 ≥1000，或横屏且高 ≤540（手机横着拿）：导航挪到右边，不占高度
+   两栏做题  横屏且宽 ≥820：左边题干（吸顶）右边作答，看解释时题干还在屏幕上
+   iPhone 装到主屏后状态栏是白字（black-translucent），顶部安全区垫一条深色带，浅色模式下也看得见。
+   安全区一律走变量（--st --sb --sl --sr），测试时覆盖变量就能模拟刘海。 */
+:root{
+  --bg:#fbfbfa; --panel:#fff; --ink:#1a1a18; --dim:#6b6b66; --line:#e3e3df;
+  --accent:#2f6f4f; --soft:#e6f2ec; --ok:#2f6f4f; --bad:#a63d3d; --badsoft:#faecec;
+  --sbar:#2f6f4f;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.06);
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px); --inr:env(safe-area-inset-right,0px);
+  --sr:var(--inr);                    /* 内容右侧要让出的宽度；侧栏模式下由导航栏吃掉 */
+  --navh:calc(60px + var(--sb)); --navw:0px;
+  --hdrh:64px;                        /* app.js 按实际顶栏高度改写 */
+  --maxw:820px; --padx:16px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#16171a; --panel:#1e2024; --ink:#e8e8e4; --dim:#9a9a94; --line:#2e3136;
+  --accent:#6fbf94; --soft:#1d2f26; --ok:#6fbf94; --bad:#e08b8b; --badsoft:#2f1f1f;
+  --sbar:#16171a;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg);-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}
+html,body{overscroll-behavior-y:none}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  min-height:100vh;min-height:100dvh;padding-bottom:var(--navh);padding-right:var(--navw)}
+code,.mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;font-size:.92em}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;
+  -webkit-appearance:none;appearance:none;touch-action:manipulation}
+button,nav{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+/* ---------- 顶栏（吸顶，含状态栏那一条） ---------- */
+header{position:sticky;top:0;z-index:20;
+  padding:calc(var(--st) + 6px) calc(var(--padx) + var(--sr)) 8px calc(var(--padx) + var(--sl));
+  background:linear-gradient(var(--sbar) var(--st),var(--bg) var(--st))}
+.hrow{display:flex;align-items:center;gap:4px;max-width:calc(var(--maxw) - 2 * var(--padx));margin:0 auto}
+header .t{flex:1;min-width:0;font-size:13.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .t b{color:var(--ink)}
+.icobtn{flex:none;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  font-size:18px;color:var(--dim);border:1px solid transparent}
+.icobtn:active{background:var(--line)}
+.icobtn.hot{color:var(--accent);border-color:var(--accent)}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;
+  max-width:calc(var(--maxw) - 2 * var(--padx));margin:4px auto 0}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+
+/* ---------- 主体（页面本身滚动：iOS 点状态栏回顶、键盘避让都靠它） ---------- */
+main{display:block;max-width:var(--maxw);margin:0 auto;
+  padding:10px calc(var(--padx) + var(--sr)) 20px calc(var(--padx) + var(--sl))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:20px;margin-bottom:14px}
+.q{font-size:20px;line-height:1.5;font-weight:500;margin:0 0 18px;overflow-wrap:anywhere}
+.q code{background:var(--soft);color:var(--accent);padding:1px 6px;border-radius:5px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;
+  overflow-x:auto;font-size:13.5px;line-height:1.55;margin:0 0 16px}
+.stmt{background:var(--bg);border-left:3px solid var(--dim);border-radius:8px;
+  padding:12px 14px;margin:0 0 16px;font-size:15px}
+.qa,.qb{min-width:0}
+
+/* 「不会 / 提交」：吸在底栏上面，拇指够得着，不用滚到底找按钮 */
+.acts{display:flex;gap:10px;position:sticky;z-index:5;bottom:calc(var(--navh) + 10px);
+  margin:18px -10px -10px;padding:10px;border-radius:15px;background:var(--panel);
+  box-shadow:0 -8px 18px -12px rgba(0,0,0,.3)}
+.acts .btn{margin:0;width:auto;flex:1}
+.acts #goBtn{flex:2}
+
+/* 选项：拇指可达 */
+.opt{display:flex;gap:12px;align-items:flex-start;padding:15px 16px;margin-bottom:10px;
+  border:1.5px solid var(--line);border-radius:13px;background:var(--panel);
+  min-height:54px;transition:.1s;width:100%;text-align:left}
+.opt:active{transform:scale(.985)}
+.opt .k{flex:none;width:24px;height:24px;border-radius:7px;border:1.5px solid var(--line);
+  display:grid;place-items:center;font-size:12px;color:var(--dim)}
+.opt.sel{border-color:var(--accent);background:var(--soft)}
+.opt.sel .k{background:var(--accent);color:#fff;border-color:var(--accent)}
+.opt.right{border-color:var(--ok);background:var(--soft)}
+.opt.wrong{border-color:var(--bad);background:var(--badsoft)}
+
+/* 排序 / 池子 */
+.dl{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+.di{display:flex;gap:12px;align-items:center;padding:12px 12px 12px 15px;background:var(--panel);
+  border:1.5px solid var(--line);border-radius:12px;min-height:56px}
+.di .n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--soft);
+  color:var(--accent);display:grid;place-items:center;font-size:13px;font-weight:600}
+.di .mv{margin-left:auto;display:flex;gap:6px;flex:none}
+.di .mv button{width:42px;height:42px;border-radius:10px;border:1px solid var(--line);
+  color:var(--dim);font-size:16px}
+.di .mv button:active{background:var(--soft);color:var(--accent)}
+.pool{display:flex;flex-wrap:wrap;gap:9px;padding:13px;background:var(--bg);
+  border:1.5px dashed var(--line);border-radius:12px;margin-bottom:14px;min-height:56px}
+.tok{padding:11px 15px;background:var(--panel);border:1.5px solid var(--line);
+  border-radius:10px;font-family:ui-monospace,monospace;font-size:14px;min-height:44px;max-width:100%;overflow-wrap:anywhere}
+.tok.armed{border-color:var(--accent);background:var(--soft)}
+.tok.used{opacity:.25}
+.slot{display:inline-grid;place-items:center;min-width:90px;min-height:40px;padding:6px 12px;
+  border:1.5px dashed var(--accent);border-radius:9px;background:var(--soft);
+  font-family:ui-monospace,monospace;font-size:14px;vertical-align:middle;cursor:pointer;max-width:100%;overflow-wrap:anywhere}
+.slot.filled{border-style:solid}
+.tmpl{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;
+  margin-bottom:14px;line-height:2.8;font-family:ui-monospace,monospace;font-size:14px;overflow-wrap:anywhere}
+.srow{display:flex;align-items:center;gap:10px;margin-bottom:9px;padding:11px 13px;
+  background:var(--bg);border:1px solid var(--line);border-radius:11px}
+.srow .lab{flex:1;color:var(--dim);font-size:13.5px}
+
+/* 配对 */
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+.mi{padding:13px;border:1.5px solid var(--line);border-radius:11px;background:var(--panel);
+  font-size:14px;position:relative;min-height:50px;text-align:left;width:100%;overflow-wrap:anywhere}
+.mi.active,.mi.paired{border-color:var(--accent);background:var(--soft)}
+.mi .tg{position:absolute;top:-8px;right:8px;background:var(--accent);color:#fff;
+  font-size:10px;padding:1px 7px;border-radius:9px}
+.mi.right{border-color:var(--ok)} .mi.wrong{border-color:var(--bad);background:var(--badsoft)}
+
+/* 判断 */
+.tf{display:flex;gap:10px;margin-bottom:14px}
+.tf button{flex:1;padding:17px;font-size:17px;font-weight:600;border:1.5px solid var(--line);
+  border-radius:13px;background:var(--panel)}
+.tf button.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+textarea{display:block;width:100%;min-height:80px;padding:13px;border:1.5px solid var(--line);
+  border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;font-size:max(16px,1em);
+  resize:vertical;-webkit-appearance:none;appearance:none}
+
+/* 反馈（scroll-margin：滚过去时不被顶栏、吸底按钮、底栏挡住） */
+.fb{margin-top:16px;padding:14px;border-radius:12px;border-left:3px solid;font-size:15px;line-height:1.7;
+  scroll-margin-top:calc(var(--hdrh) + 10px);scroll-margin-bottom:calc(var(--navh) + 96px)}
+.fb.ok{background:var(--soft);border-color:var(--ok)}
+.fb.no{background:var(--badsoft);border-color:var(--bad)}
+.fb.pd{background:var(--bg);border-color:var(--dim)}
+.fb b{display:block;margin-bottom:6px}
+
+/* 列表 / 空态 */
+.row{display:flex;gap:12px;align-items:center;padding:15px 16px;margin-bottom:10px;
+  border:1px solid var(--line);border-radius:13px;background:var(--panel);width:100%;text-align:left;min-height:58px}
+.row .badge{flex:none;min-width:34px;height:34px;padding:0 8px;border-radius:9px;background:var(--soft);
+  color:var(--accent);display:grid;place-items:center;font-size:13px;font-weight:700}
+.row .sub{font-size:12.5px;color:var(--dim);margin-top:2px}
+.empty{text-align:center;color:var(--dim);padding:48px 20px;font-size:15px}
+.empty .big{font-size:40px;margin-bottom:12px;opacity:.5}
+
+/* 图库：列表里是缩略，点开全屏看（可双指缩放） */
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.fig h3{margin:0 0 3px;font-size:16px}
+.fig .meta{font-size:11.5px;color:var(--dim);margin-bottom:10px}
+.fig .wrap{position:relative;background:var(--bg);border-radius:10px;padding:8px;cursor:zoom-in}
+.fig .wrap svg{display:block;width:100%;height:auto}
+.fig .zh{position:absolute;right:8px;bottom:8px;font-size:11.5px;padding:3px 9px;border-radius:9px;
+  background:var(--panel);color:var(--dim);border:1px solid var(--line);pointer-events:none}
+.fig .cap{font-size:13.5px;color:var(--ink);line-height:1.7;margin-top:10px}
+.fig details{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;font-size:13.5px}
+.fig summary{color:var(--accent);font-weight:600;font-size:13px;min-height:32px}
+.fig ul{margin:8px 0 0;padding-left:18px;color:var(--dim)}
+
+.viewer{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;flex-direction:column}
+.viewer[hidden]{display:none}
+.vbar{display:flex;align-items:center;gap:8px;flex:none;
+  padding:calc(var(--st) + 6px) calc(12px + var(--inr)) 6px calc(16px + var(--sl));
+  background:linear-gradient(var(--sbar) var(--st),var(--panel) var(--st));border-bottom:1px solid var(--line)}
+.vbar b{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vbar button{flex:none;min-height:44px;min-width:44px;padding:0 12px;border-radius:11px;border:1px solid var(--line);
+  font-size:14px;color:var(--dim)}
+.vbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:12px calc(12px + var(--inr)) calc(12px + var(--sb)) calc(12px + var(--sl))}
+.vbody svg{display:block;height:auto;width:900px;max-width:none;margin:0 auto}
+.viewer.fit .vbody svg{width:100%;max-width:1400px}
+.vtip{font-size:12.5px;color:var(--dim);text-align:center;margin:0 0 10px}
+@media (orientation:landscape){.vtip{display:none}}
+
+/* 设置 */
+.chip{font-size:13px;padding:8px 14px;border:1px solid var(--line);
+  border-radius:20px;color:var(--dim);background:var(--bg);min-height:40px}
+.chip:active{border-color:var(--accent);color:var(--accent)}
+label.f{display:block;margin-bottom:14px}
+label.f span{display:block;font-size:12.5px;color:var(--dim);margin-bottom:6px}
+input[type=text],input[type=password]{width:100%;padding:13px;border:1.5px solid var(--line);
+  border-radius:11px;background:var(--bg);color:var(--ink);font:inherit;font-size:max(16px,1em);
+  -webkit-appearance:none;appearance:none}
+.btn{display:block;width:100%;padding:15px;border-radius:13px;background:var(--accent);
+  color:#fff;font-weight:600;font-size:16px;margin-bottom:10px;min-height:52px}
+.btn.sec{background:var(--panel);color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.45}
+
+/* 提示 / 下拉刷新 */
+.toast{position:fixed;z-index:99;left:calc(16px + var(--sl));right:calc(16px + var(--sr) + var(--navw));
+  bottom:calc(var(--navh) + 16px);max-width:560px;margin:0 auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;
+  box-shadow:var(--shadow);font-size:14px}
+.ptr{position:fixed;top:var(--st);left:0;right:var(--navw);height:0;z-index:50;
+  display:flex;align-items:flex-end;justify-content:center;overflow:hidden;
+  background:var(--bg);color:var(--accent);font-size:13px;transition:height .12s;pointer-events:none}
+
+/* ---------- 底栏 ---------- */
+nav{position:fixed;left:0;right:0;bottom:0;height:var(--navh);z-index:30;display:flex;
+  padding:0 var(--inr) var(--sb) var(--sl);
+  background:var(--panel);border-top:1px solid var(--line)}
+nav button{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;font-size:11px;color:var(--dim);padding:0;min-height:44px}
+nav button .i{font-size:20px;line-height:1}
+nav button.on{color:var(--accent)}
+nav button .dot{position:absolute;top:9px;left:calc(50% + 9px);width:8px;height:8px;
+  border-radius:50%;background:var(--bad)}
+/* 手机上弹出键盘时：底栏藏起来、按钮不再吸底（iOS 的 fixed 元素遇到键盘会乱跑） */
+body.kb nav{display:none}
+body.kb .acts{position:static}
+
+/* ---------- 平板竖屏 · 大屏 ---------- */
+@media (min-width:700px){
+  :root{--padx:28px}
+  body{font-size:17px}
+  .q{font-size:22px}
+  .mg{gap:12px}
+  nav{justify-content:center}
+  nav button{flex:0 1 128px}                /* 平板竖屏：四个按钮收在中间，不摊满整条 */
+}
+
+/* ---------- 侧栏：宽屏，或手机横着拿 ---------- */
+@media (min-width:1000px),(orientation:landscape) and (max-height:540px){
+  :root{--navh:var(--sb);--navw:calc(84px + var(--inr));--sr:0px}
+  nav{top:0;bottom:0;left:auto;right:0;width:var(--navw);height:auto;flex-direction:column;
+    justify-content:center;gap:6px;border-top:none;border-left:1px solid var(--line);
+    padding:var(--st) var(--inr) var(--sb) 0;
+    background:linear-gradient(var(--sbar) var(--st),var(--panel) var(--st))}
+  nav button{flex:none;height:68px}
+  nav button .i{font-size:22px}
+  body.kb nav{display:flex}
+}
+
+/* ---------- 手机横屏：高度只有 ~390，全部收紧 ---------- */
+@media (orientation:landscape) and (max-height:540px){
+  header{padding-top:calc(var(--st) + 2px);padding-bottom:5px}
+  .icobtn{width:40px;height:40px}
+  main{padding-top:6px}
+  .card{padding:14px 16px}
+  .q{font-size:18px;margin-bottom:12px}
+  .opt{padding:10px 14px;min-height:46px;margin-bottom:8px}
+  .tf button{padding:12px}
+  .acts{margin-top:12px;padding:8px}
+  .acts .btn{min-height:46px;padding:10px}
+  nav button{height:60px}
+}
+
+/* ---------- 横屏两栏做题（安卓平板 / iPad / 大手机横屏） ---------- */
+@media (orientation:landscape) and (min-width:820px){
+  body[data-v="quiz"]{--maxw:1180px}
+  .qcard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:32px;align-items:start}
+  .qcard .qa{grid-column:1;grid-row:1 / span 2;position:sticky;top:calc(var(--hdrh) + 14px);
+    max-height:calc(100vh - var(--hdrh) - 28px - var(--sb));overflow:auto;overscroll-behavior:contain}
+  .qcard .qb{grid-column:2;grid-row:1}
+  .qcard .acts{grid-column:2;grid-row:2}
+  .qcard .qa .q{margin-bottom:12px}
+}
+@media (min-width:1000px){
+  body[data-v="gallery"]{--maxw:1040px}
+}
+@media (hover:hover){
+  .opt:hover,.row:hover,.tok:hover,.mi:hover{border-color:var(--dim)}
+}
+</style>
+</head>
+<body data-v="home">
+<header>
+  <div class="hrow">
+    <div class="t" id="crumb">学习工作台</div>
+    <button class="icobtn" id="syncBtn" title="同步" aria-label="同步">↻</button>
+    <button class="icobtn" id="stopBtn" title="够了" aria-label="够了，保存并结束" style="display:none">✕</button>
+  </div>
+  <div class="bar"><i id="barFill" style="width:0"></i></div>
+</header>
+<main id="main"></main>
+<nav>
+  <button data-v="home" class="on"><span class="i">◎</span>做题</button>
+  <button data-v="due"><span class="i">↻</span>到期<span class="dot" id="dueDot" style="display:none"></span></button>
+  <button data-v="gallery"><span class="i">▦</span>图库</button>
+  <button data-v="settings"><span class="i">⚙</span>设置</button>
+</nav>
+<div class="viewer" id="viewer" hidden>
+  <div class="vbar">
+    <b id="vTitle"></b>
+    <button id="vFit">适应屏幕</button>
+    <button id="vClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="vbody">
+    <div class="vtip">横过来看更清楚 · 可以双指放大</div>
+    <div id="vSvg"></div>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

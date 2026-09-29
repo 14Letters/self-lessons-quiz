@@ -1,0 +1,25 @@
+{
+  "name": "学习工作台",
+  "short_name": "Quiz",
+  "description": "碎片时间做题与复习。题目和图解从私有仓库同步。",
+  "id": "/self-lessons-quiz/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#fbfbfa",
+  "theme_color": "#2f6f4f",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "到期回忆", "short_name": "到期", "url": "./?v=due", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "图库", "short_name": "图库", "url": "./?v=gallery", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
