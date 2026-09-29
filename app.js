@@ -679,11 +679,51 @@ function bump(id, correct, dontKnow) {
   statePatch[id] = e;
 }
 
+/* ---- 完成页：回看这一组 ----
+   做题时的反馈一滑就走了。做完在这里一题一题点开：你选了什么 · 正确答案 · 解释 · 你写的笔记 */
+const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent; };
+function fmtAns(q, v) {
+  if (v == null) return '—';
+  const pick = (arr, i) => (i == null || !arr ? '?' : arr[i]);
+  switch (q.type) {
+    case 'mcq':   return KEYS[v] + '. ' + pick(q.options, v);
+    case 'multi': return [].concat(v).map(i => KEYS[i] + '. ' + pick(q.options, i)).join('；');
+    case 'order': return v.map(i => pick(q.items, i)).join(' → ');
+    case 'match': return v.map((j, i) => pick(q.left, i) + ' → ' + pick(q.right, j)).join('；');
+    case 'fill':  return v.map(i => pick(q.pool, i)).join(' · ');
+    case 'place': return v.map((i, k) => pick(q.slots, k) + '：' + pick(q.blocks, i)).join('；');
+    case 'judge': return typeof v === 'boolean' ? (v ? '对' : '错')
+                       : (v.tf == null ? '没选' : v.tf ? '对' : '错') + (v.reason ? '，理由：' + v.reason : '');
+  }
+  return JSON.stringify(v);
+}
+function reviewCard(qs, ans) {
+  if (!ans.length) return '';
+  const rows = ans.map((a, i) => {
+    const q = qs.find(x => x.id === a.id) || {};
+    const [mark, color, word] = a.status === 'dont_know' ? ['?', 'var(--dim)', '标了不会']
+      : a.status === 'pending_review' ? ['⋯', 'var(--dim)', '理由待电脑上批']
+      : a.correct ? ['✓', 'var(--ok)', '对'] : ['✗', 'var(--bad)', '错'];
+    const mine = a.status === 'dont_know' ? '（标了不会）' : fmtAns(q, a.picked);
+    return `<details class="rv"><summary><b style="color:${color}">${mark}</b>` +
+      `<span>第 ${i + 1} 题<i> · ${esc(strip(q.prompt || q.statement || '').slice(0, 60))}</i></span></summary>
+      <div class="rvb"><div class="rq">${q.prompt || esc(q.statement || '')}</div>
+        ${q.code ? `<pre>${esc(q.code)}</pre>` : ''}
+        <div class="kv"><span class="lab">结果</span><span>${word}</span></div>
+        <div class="kv"><span class="lab">你的</span><span>${esc(mine)}</span></div>
+        <div class="kv"><span class="lab">正确</span><span>${esc(fmtAns(q, q.answer))}</span></div>
+        ${q.explain ? `<div class="ex">${esc(q.explain).replace(/\n/g, '<br>')}</div>` : ''}
+        ${a.note ? `<div class="ex"><span class="lab">你的笔记</span>${esc(a.note)}</div>` : ''}</div></details>`;
+  }).join('');
+  return `<div class="card"><div style="font-size:16px;font-weight:600;margin-bottom:2px">回看这一组</div>
+    <div style="font-size:12.5px;color:var(--dim);margin-bottom:8px">点开一题：你选了什么、正确答案、解释</div>${rows}</div>`;
+}
+
 async function finish() {
   const done = answers.length;
   const graded = answers.filter(a => a.status === 'graded');
   const right = graded.filter(a => a.correct).length;
-  const slug = quiz._slug, unit = quiz.unit, qpath = quiz._path || null;
+  const slug = quiz._slug, unit = quiz.unit, qpath = quiz._path || null, qs = quiz.questions;
   const result = { course: slug, unit, startedAt, endedAt: new Date().toISOString(),
                    completed: done, total: quiz.questions.length, answers };
   quiz = null; stopBtn.style.display = 'none'; barFill.style.width = '100%';
@@ -702,6 +742,7 @@ async function finish() {
     </div>
     <div id="pushInfo" style="font-size:13px;color:var(--dim)">保存中…</div>
   </div>
+  ${reviewCard(qs, answers)}
   <div class="card" style="border-color:var(--accent)">
     <div style="font-size:16px;color:var(--accent);font-weight:600;margin-bottom:4px">整组还有什么想说的？</div>
     <div style="font-size:13px;color:var(--dim);line-height:1.7;margin-bottom:12px">

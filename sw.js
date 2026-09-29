@@ -2,7 +2,7 @@
    壳：cache-first（打开即渲染，不等网络）
    数据：由 app 走 IndexedDB，SW 不缓存 GitHub API 响应（避免拿到陈旧的 sha 导致写冲突）
 */
-const VERSION = 'v2';   // 2026-09-29 手机 / 平板适配：改了壳就要升版本，装好的 app 才会换新
+const VERSION = 'v3';   // 2026-09-29 手机 / 平板适配：改了壳就要升版本，装好的 app 才会换新
 const SHELL = 'shell-' + VERSION;
 const ASSETS = 'assets-' + VERSION;
 
